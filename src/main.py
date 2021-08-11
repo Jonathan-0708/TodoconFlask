@@ -1,39 +1,72 @@
-"""
-This module takes care of starting the API Server, Loading the DB and Adding the endpoints
-"""
 from flask import Flask, request, jsonify
-from models import db, User
+from models import db, Task
+from flask_cors import CORS 
+
 #from models import Person
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://yraidaguillen:superadmin...@85.10.205.173:3306/yg_todolist"
+ # This will enable CORS for all routes
+app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://jonathan:123456@localhost/jonathan_base_de_datos"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-#db.init_app(app)
+app.config['CORS_HEADERS'] = 'Content-Type'
+
+cors = CORS(app, resources={r"/tareas": {"origins": "http://localhost:port"}})
+CORS(app)
+
+db.init_app(app)
 
 # generate sitemap with all your endpoints
 @app.route('/') #Esto es un decorador
 def home():
     return jsonify({"mensaje":"Bienvenidos a mi app"})
 
-@app.route('/tareas', methods=['GET','PUT'])
+@app.route('/tareas/<id>', methods=['GET'])
+def get_detail_task(id):
+    task_found = Task.query.get(id)
+    if not task_found:
+        return jsonify({ "message": 'tarea no encontrada', "tareas": {}})
+    return jsonify({ "message": 'tarea obtenida satisfactoriamente', "task": task_found.serialize()})
+
+@app.route('/tareas', methods=['GET'])
 def obtener_tareas():
-    if request.method == 'GET':
-        return jsonify({"mensaje_via_get":"Bienvenidos a mi app GET"})
-    if request.method == 'PUT':
-        return jsonify({"mensaje_via_put":"Bienvenidos a mi app PUT"})
+    tasks = Task.query.all()
+    print(tasks)
+    allTasks = [task.serialize() for task in tasks]
+    return jsonify({"mensaje":"Bienvenidos a mi app GET",'tasks': allTasks})
 
 @app.route('/tareas', methods=['POST'])
-def obtener_tareas_post():
-    return jsonify({"mensaje_via_post":"Bienvenidos a mi app POST"})
+def agregar_tareas_post():
+    name = request.json["name"]
+    done = request.json["done"]
+    new_task = Task(name = name, done = done)
+    db.session.add(new_task)
+    db.session.commit()
+    return jsonify({"mensaje":"Bienvenidos a mi app POST","task" : new_task.serialize()})
 
-#@app.route('/tareas', methods=['PUT'])
-#def obtener_tareas_put():
-    #return jsonify({"mensaje_via_put":"Bienvenidos a mi app PUT"})
+@app.route('/tareas/<id>', methods=['PUT'])
+def get_update_task(id):
+    task_found = Task.query.get(id)
+    if not task_found:
+       return jsonify({ "message": 'tarea no encontrada', "task": {}}).headers.add('Access-Control-Allow-Origin', '*')
+    task_found.name = request.json["name"]
+    task_found.done = request.json["done"]
 
-@app.route('/tareas', methods=['DELETE'])
-def obtener_tareas_delete():
-    return jsonify({"mensaje_via_delete":"Bienvenidos a mi app DELETE"})
+    db.session.commit()
+    return jsonify({ "message": 'tarea actualizada satisfactoriamente', "task": task_found.serialize()})
+
+@app.route('/tareas/<id>', methods=['DELETE'])
+def get_delete_task(id):
+    task_found = Task.query.get(id)
+    if not task_found:
+        return jsonify({ "message": 'tarea no encontrada', "task": {}})
+
+    db.session.delete(task_found)
+    db.session.commit()
+
+    return jsonify({ "message": 'tarea eliminada satisfactoriamente'})
 
 # this only runs if `$ python src/main.py` is executed
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    with app.app_context():
+        db.create_all()
+        app.run(host='0.0.0.0', port=5000, debug=True)
